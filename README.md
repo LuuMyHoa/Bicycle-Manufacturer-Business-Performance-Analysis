@@ -9,23 +9,9 @@
 * [Recommendations](#recommendations)
 
 ## Business Problem
-A bicycle manufacturing company wants to better understand its business performance in order to support data-driven decision making. The management team needs insights into product performance, sales trends, customer retention, and inventory efficiency.
+A bicycle manufacturing company wants clearer visibility into its business performance to support better operational and strategic decisions. The management team needs insights into product performance, sales trends, customer retention, and inventory efficiency.
 
-This project analyzes historical sales data to answer several key business questions:
-
-* Which product subcategories generate the highest sales?
-
-* Which product categories are growing the fastest year over year?
-
-* Which sales territories generate the most orders?
-
-* How effective are seasonal discounts?
-
-* How well does the company retain customers?
-
-* Is inventory aligned with product demand?
-
-The goal of this analysis is to uncover meaningful insights that can help improve sales performance, optimize inventory, and support strategic decision making.
+Using historical data from the AdventureWorks dataset, this project uses SQL to analyze key aspects of the business, including sales performance, product growth, market demand, customer behavior, inventory management, and purchasing activity.
 
 ## Dataset
 This project uses the AdventureWorks2019 dataset, a widely used sample database representing a bicycle manufacturing company.
@@ -202,9 +188,86 @@ where dk<=3;
 
 **4. Calculate the total cost of seasonal discounts by product subcategory.**
 
+```sql
+SELECT 
+  extract(year from a.ModifiedDate) year 
+  ,c.name
+  ,sum(d.DiscountPct * a.UnitPrice * a.OrderQty) total_cost
+  --Discount Cost = Disct Pct * Unit Price * Item Qty
+FROM `adventureworks2019.Sales.SalesOrderDetail` a
+left join `adventureworks2019.Production.Product` b
+  on a.ProductID=b.ProductID
+left join `adventureworks2019.Production.ProductSubcategory` c
+  on cast(b.ProductSubcategoryID as int)=c.ProductSubcategoryID
+left join `adventureworks2019.Sales.SpecialOffer` d
+  on a.SpecialOfferID=d.SpecialOfferID
+where lower(d.Type) like '%seasonal discount%' 
+group by 1,2
+order by 1,2;
+```
+
+| year | name | total_cost |
+|------|------|------|
+| 2012	| Helmets	| 827.64732 | 
+| 2013	| Helmets	| 1606.041 | 
 
 **5. Analyze customer retention in 2014 by identifying each customer's first purchase month and measuring the percentage of customers who return in subsequent months.**
 
+```sql
+/* 
+Step 1: Tìm danh sách khách hàng và tháng đầu tiên (month_join) khách đó mua hàng (cte first_order)
+Step 2: Đếm số khách group by month_join, month_diff = month_curr-month_join (mapping cte step 1 và bảng gốc)
+Step 3: Dùng window function first_value() để lấy ra total_cus từng month_join -> tính % retention_rate
+*/
+with
+first_order as(
+  SELECT
+    CustomerID
+    ,extract(month from min(ModifiedDate)) month_join
+  FROM `adventureworks2019.Sales.SalesOrderHeader`
+  where CustomerID in (SELECT -- danh sách khách hàng mua lần đầu tiên
+                        distinct CustomerID 
+                      FROM `adventureworks2019.Sales.SalesOrderHeader`)
+    and extract(year from ModifiedDate) =2014
+    and Status =5 --shipped
+  group by 1
+),
+
+months_data AS ( -- các tháng sau tháng đầu
+  SELECT
+    month_join
+    ,extract(month from ModifiedDate) curr_month
+    ,(extract(month from ModifiedDate)- month_join) month_diff
+    ,count(distinct f.CustomerID) cnt_cus
+  FROM first_order f
+  left join `adventureworks2019.Sales.SalesOrderHeader` a
+    on f.CustomerID = a.CustomerID
+  where extract(year from ModifiedDate) =2014
+  group by 1,2,3
+)
+
+select 
+  month_join
+  ,format('M-%d',month_diff) month_diff
+  ,cnt_cus
+  ,first_value(cnt_cus)over(partition by month_join order by month_diff) total_cus
+  ,round(cnt_cus*100/first_value(cnt_cus)over(partition by month_join order by month_diff),2) retention_rate
+from months_data
+order by 1,2;
+```
+
+| month_join | month_diff | cnt_cus | total_cus | retention_rate |
+|-------------|------------|--------|-----------|----------------|
+| 1 | M-0 | 2076 | 2076 | 100 |
+| 1 | M-1 | 78 | 2076 | 3.76 |
+| 1 | M-2 | 89 | 2076 | 4.29 |
+| 1 | M-3 | 252 | 2076 | 12.14 |
+| 1 | M-4 | 96 | 2076 | 4.62 |
+| 1 | M-5 | 61 | 2076 | 2.94 |
+| 1 | M-6 | 18 | 2076 | 0.87 |
+| 2 | M-0 | 1805 | 1805 | 100 |
+| 2 | M-1 | 51 | 1805 | 2.83 |
+| 2 | M-2 | 61 | 1805 | 3.38 |
 
 **6. Analyze stock levels by product and calculate Month-over-Month (MoM) growth in inventory levels.**
 
@@ -212,16 +275,48 @@ where dk<=3;
 
 ```
 
+| Name | year | month | stock_current | stock_prv | MoM_rate |
+|------|------|------|---------------|-----------|----------|
+| BB Ball Bearing | 2011 | 12 | 8475 | 14544 | -41.7 |
+| BB Ball Bearing | 2011 | 11 | 14544 | 19175 | -24.2 |
+| BB Ball Bearing | 2011 | 10 | 19175 | 8845 | 116.8 |
+| BB Ball Bearing | 2011 | 9 | 8845 | 9666 | -8.5 |
+| BB Ball Bearing | 2011 | 8 | 9666 | 12837 | -24.7 |
+| BB Ball Bearing | 2011 | 7 | 12837 | 5259 | 144.1 |
+| BB Ball Bearing | 2011 | 6 | 5259 | null | 0.0 |
+| Blade | 2011 | 12 | 1842 | 3598 | -48.8 |
+
 **7. Calculate the ratio of stock quantity to sales quantity by product and month.**
 
 ```sql
+
 ```
+
+| month | year | ProductID | Name | stock_qty | order_qty | ratio |
+|------|------|-----------|------------ |-----------|-----------|------------------|
+| 12 | 2011 | 745 | HL Mountain Frame - Black, 48 | 27 | 1 | 27 |
+| 12 | 2011 | 743 | HL Mountain Frame - Black, 42 | 26 | 1 | 26 |
+| 12 | 2011 | 748 | HL Mountain Frame - Silver, 38 | 32 | 2 | 16 |
+| 12 | 2011 | 722 | LL Road Frame - Black, 58 | 47 | 4 | 11.8 |
+| 12 | 2011 | 747 | HL Mountain Frame - Black, 38 | 31 | 3 | 10.3 |
+| 12 | 2011 | 726 | LL Road Frame - Red, 48 | 36 | 5 | 7.2 |
 
 **8. Calculate the number and total value of purchase orders with pending status in 2014..**
 
 ```sql
-
+SELECT 
+  extract(year from ModifiedDate) year
+  ,Status
+  ,count(distinct PurchaseOrderID) order_cnt 
+  ,sum(TotalDue) value 
+FROM `adventureworks2019.Purchasing.PurchaseOrderHeader` 
+where Status =1 --Pending status
+  and extract(year from ModifiedDate) = 2014
+group by 1,2;
 ```
+| year | status | order_cnt | value |
+|------|--------|-----------|-------|
+| 2014 | 1 | 224 | 3873579.0123000029 |
 
 ## Insights
 
