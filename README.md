@@ -272,7 +272,40 @@ order by 1,2;
 **6. Analyze stock levels by product and calculate Month-over-Month (MoM) growth in inventory levels.**
 
 ```sql
+with
+call_stock_current as(
+  SELECT 
+    a.Name
+    ,extract(year from w.ModifiedDate) year
+    ,extract(month from w.ModifiedDate) month
+    ,sum(w.StockedQty) stock_current
+  FROM `adventureworks2019.Production.Product` a
+  left join `adventureworks2019.Production.WorkOrder` w
+    on a.ProductID=w.ProductID
+  where extract(year from w.ModifiedDate) =2011
+  group by 1,2,3
+),
 
+call_MoM as(
+  select
+    Name
+    ,year
+    ,month
+    ,stock_current
+    ,lead(stock_current)over(partition by Name, year order by month desc) stock_prv
+    ,(stock_current/lag(stock_current)over(partition by Name, year order by month)-1)*100 MoM_rate
+  from call_stock_current
+)
+
+select
+  Name
+  ,year
+  ,month
+  ,stock_current
+  ,stock_prv
+  ,round(coalesce(MoM_rate ,0) ,1) as MoM_rate
+from call_MoM
+order by 1,2,3 desc;
 ```
 
 | Name | year | month | stock_current | stock_prv | MoM_rate |
@@ -289,17 +322,52 @@ order by 1,2;
 **7. Calculate the ratio of stock quantity to sales quantity by product and month.**
 
 ```sql
+with 
+sale_info as(
+  SELECT 
+    extract(month from a.ModifiedDate) month
+    ,extract(year from a.ModifiedDate) year
+    ,a.ProductID
+    ,b.Name
+    ,sum(a.OrderQty) sales
+  FROM `adventureworks2019.Sales.SalesOrderDetail` a
+  left join `adventureworks2019.Production.Product` b
+    on a.ProductID=b.ProductID
+  where extract(year from a.ModifiedDate) =2011
+  group by 1,2,3,4
+),
 
+stock_info as(
+  SELECT 
+    extract(month from ModifiedDate) month
+    ,extract(year from ModifiedDate) year
+    ,ProductID
+    ,sum(StockedQty) stock
+  FROM `adventureworks2019.Production.WorkOrder` 
+  where extract(year from ModifiedDate) =2011
+  group by 1,2,3
+)
+
+select 
+  a.*
+  ,stock
+  ,round(coalesce(stock, 0)/sales,2) ratio
+from sale_info a
+full join stock_info b
+  on a.ProductID=b.ProductID
+  and a.month=b.month
+  and a.year=b.year
+order by month desc,ratio desc;
 ```
 
-| month | year | ProductID | Name | stock_qty | order_qty | ratio |
-|------|------|-----------|------------ |-----------|-----------|------------------|
-| 12 | 2011 | 745 | HL Mountain Frame - Black, 48 | 27 | 1 | 27 |
-| 12 | 2011 | 743 | HL Mountain Frame - Black, 42 | 26 | 1 | 26 |
-| 12 | 2011 | 748 | HL Mountain Frame - Silver, 38 | 32 | 2 | 16 |
-| 12 | 2011 | 722 | LL Road Frame - Black, 58 | 47 | 4 | 11.8 |
-| 12 | 2011 | 747 | HL Mountain Frame - Black, 38 | 31 | 3 | 10.3 |
-| 12 | 2011 | 726 | LL Road Frame - Red, 48 | 36 | 5 | 7.2 |
+| month | year | ProductID | Name | sales | stock | ratio |
+|------|------|-----------|------------ |-----------|-----------|------------|
+| 12 | 2011 | 745 | HL Mountain Frame - Black, 48 | 1 | 27 | 27.0 |
+| 12 | 2011 | 743 | HL Mountain Frame - Black, 42 | 1 | 26 | 26.0 |
+| 12 | 2011 | 748 | HL Mountain Frame - Silver, 38 | 2 | 32 | 16.0 |
+| 12 | 2011 | 722 | LL Road Frame - Black, 58 | 4 | 47 | 11.75 |
+| 12 | 2011 | 747 | HL Mountain Frame - Black, 38 | 3 | 31 | 10.33 |
+| 12 | 2011 | 726 | LL Road Frame - Red, 48 | 5 | 36 | 7.2 |
 
 **8. Calculate the number and total value of purchase orders with pending status in 2014..**
 
