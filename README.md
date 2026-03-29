@@ -1,5 +1,7 @@
 # Bicycle Manufacturer Business Performance Analysis
 
+![image](Gemini_Generated_Image_02.png).
+
 ## Table of Contents
 
 * [Business Problem](#business-problem)
