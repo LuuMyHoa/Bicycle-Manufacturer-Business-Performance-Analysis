@@ -7,8 +7,7 @@
 * [Business Problem](#business-problem)
 * [Dataset](#dataset)
 * [Analysis](#analysis)
-* [Insights](#insights)
-* [Recommendations](#recommendations)
+* [Conclusion](#conclusion)
 
 ## Business Problem
 A bicycle manufacturing company wants clearer visibility into its business performance to support better operational and strategic decisions. The management team needs insights into product performance, sales trends, customer retention, and inventory efficiency.
@@ -388,10 +387,7 @@ group by 1,2;
 |------|--------|-----------|-------|
 | 2014 | 1 | 224 | 3873579.0123000029 |
 
-## Insights
+## Conclusion
+-
 
-*
 
-## Recommendations
-
-*  
